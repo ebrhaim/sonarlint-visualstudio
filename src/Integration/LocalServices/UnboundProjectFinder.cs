@@ -66,6 +66,8 @@ namespace SonarLint.VisualStudio.Integration
 
         private Project[] GetUnboundProjects(BindingConfiguration binding)
         {
+            Core.ETW.Events.Instance.UnboundProjectFinderStart();
+
             Debug.Assert(binding.Mode.IsInAConnectedMode());
             Debug.Assert(binding.Project != null);
 
@@ -75,18 +77,30 @@ namespace SonarLint.VisualStudio.Integration
             var filteredSolutionProjects = projectSystem.GetFilteredSolutionProjects().ToArray();
             logger.LogDebug($"[Binding check] Number of bindable projects: {filteredSolutionProjects.Length}");
 
-            return filteredSolutionProjects
+            var result = filteredSolutionProjects
                 .Where(project =>
                 {
                     var configProjectBinder = projectBinderFactory.Get(project);
 
-                    logger.LogDebug($"[Binding check] Checking binding for project '{project.Name}'. Binder type: {configProjectBinder.GetType().Name}");
+                    var projectName = project.Name;
+
+                    logger.LogDebug($"[Binding check] Checking binding for project '{projectName}'. Binder type: {configProjectBinder.GetType().Name}");
+
+                    Core.ETW.Events.Instance.ProjectBinderStart(projectName);
+
                     var required = configProjectBinder.IsBindingRequired(binding, project);
-                    logger.LogDebug($"[Binding check] Is binding required: {required} (project: {project.Name})");
+
+                    Core.ETW.Events.Instance.ProjectBinderEnd();
+
+                    logger.LogDebug($"[Binding check] Is binding required: {required} (project: {projectName})");
 
                     return required;
                 })
                 .ToArray();
+
+            Core.ETW.Events.Instance.UnboundProjectFinderEnd();
+
+            return result;
         }
     }
 }

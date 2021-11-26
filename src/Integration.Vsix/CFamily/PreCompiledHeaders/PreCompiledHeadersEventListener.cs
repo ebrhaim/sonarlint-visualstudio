@@ -24,6 +24,7 @@ using System.IO.Abstractions;
 using System.Linq;
 using SonarLint.VisualStudio.Core;
 using SonarLint.VisualStudio.Core.CFamily;
+using SonarLint.VisualStudio.Core.ETW;
 using SonarLint.VisualStudio.Infrastructure.VS.DocumentEvents;
 using SonarLint.VisualStudio.IssueVisualization.Editor.LanguageDetection;
 
@@ -76,6 +77,8 @@ namespace SonarLint.VisualStudio.Integration.Vsix.CFamily
 
         private void OnActiveDocumentFocused(object sender, ActiveDocumentChangedEventArgs e)
         {
+            Events.Instance.PchProcessingStart();
+
             if (e.ActiveTextDocument == null)
             {
                 return;
@@ -93,6 +96,7 @@ namespace SonarLint.VisualStudio.Integration.Vsix.CFamily
                 CreatePreCompiledHeaders = true
             };
 
+            Events.Instance.PchProcessingTriggered();
             scheduler.Schedule(PchJobId, token =>
             {
                 cFamilyAnalyzer.ExecuteAnalysis(e.ActiveTextDocument.FilePath,
@@ -102,6 +106,8 @@ namespace SonarLint.VisualStudio.Integration.Vsix.CFamily
                     null,
                     token);
             }, pchJobTimeoutInMilliseconds);
+
+            Events.Instance.PchProcessingEnd();
         }
 
         public void Dispose()

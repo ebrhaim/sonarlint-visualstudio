@@ -50,6 +50,8 @@ namespace SonarLint.VisualStudio.Core.CFamily
 
         public async Task<IBindingConfig> GetConfigurationAsync(SonarQubeQualityProfile qualityProfile, Language language, BindingConfiguration bindingConfiguration, CancellationToken cancellationToken)
         {
+            ETW.Events.Instance.CFamilyGetBindingConfigStart();
+
             if (!IsLanguageSupported(language))
             {
                 throw new ArgumentOutOfRangeException(nameof(language));
@@ -69,6 +71,8 @@ namespace SonarLint.VisualStudio.Core.CFamily
             var settingsFilePath = bindingConfiguration.BuildPathUnderConfigDirectory(language.FileSuffixAndExtension);
 
             var configFile = new CFamilyBindingConfig(settings, settingsFilePath);
+
+            ETW.Events.Instance.CFamilyGetBindingConfigEnd();
 
             return configFile;
         }

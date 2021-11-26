@@ -86,72 +86,94 @@ namespace SonarLint.VisualStudio.Integration.Vsix.CFamily
 
             SetEnvironmentVariables(psi, runnerArgs.EnvironmentVariables);
 
+            ExecuteInternal(runnerArgs, psi);
+        }
+
+        private void ExecuteInternal(ProcessRunnerArguments runnerArgs, ProcessStartInfo psi)
+        {
+
             var hasProcessStarted = false;
             var isRunningProcessCancelled = false;
+            int processId = 0;
+            var timer = Stopwatch.StartNew();
 
-            using (var process = new Process())
-            using (runnerArgs.CancellationToken.Register(() =>
+            try
             {
-                LogMessage(CFamilyStrings.MSG_ExecutionCancelled);
-
-                lock (process)
+                using (var process = new Process())
+                using (runnerArgs.CancellationToken.Register(() =>
                 {
-                    if (!hasProcessStarted)
+                    LogMessage(CFamilyStrings.MSG_ExecutionCancelled);
+
+                    lock (process)
                     {
+                        if (!hasProcessStarted)
+                        {
                         // Cancellation was requested before process started - do nothing
                         return;
+                        }
                     }
-                }
                 // Cancellation was requested after process started - kill it
                 isRunningProcessCancelled = true;
-                KillProcess(process);
-            }))
+                    KillProcess(process);
+                }))
+                {
+                    process.ErrorDataReceived += OnErrorDataReceived;
+                    process.StartInfo = psi;
+
+                    lock (process)
+                    {
+                        if (!runnerArgs.CancellationToken.IsCancellationRequested)
+                        {
+                            process.Start();
+                            hasProcessStarted = true;
+                            processId = process.Id;
+
+                            Core.ETW.Events.Instance.ProcessRunnerStart(processId);
+                        }
+                        else
+                        {
+                            LogMessage(CFamilyStrings.MSG_ExecutionCancelled);
+                            return;
+                        }
+                    }
+
+                    process.BeginErrorReadLine();
+
+                    // Warning: do not log the raw command line args as they
+                    // may contain sensitive data
+                    LogDebug(CFamilyStrings.MSG_ExecutingFile,
+                        runnerArgs.ExeName,
+                        runnerArgs.AsLogText(),
+                        runnerArgs.WorkingDirectory,
+                        process.Id);
+
+                    try
+                    {
+                        runnerArgs.HandleInputStream?.Invoke(process.StandardInput);
+
+                        // the caller needs to start a blocking read operation, otherwise the method would exit.
+                        runnerArgs.HandleOutputStream?.Invoke(process.StandardOutput);
+
+                        // Give any asynchronous events the chance to complete
+                        process.WaitForExit();
+                        ExitCode = process.ExitCode;
+                        LogDebug(CFamilyStrings.MSG_ExecutionExitCode, process.ExitCode);
+                    }
+                    catch (Exception ex) when (isRunningProcessCancelled && !ErrorHandler.IsCriticalException(ex))
+                    {
+                        // If a process is cancelled mid-stream, an exception will be thrown.
+                    }
+                }
+            }
+            finally
             {
-                process.ErrorDataReceived += OnErrorDataReceived;
-                process.StartInfo = psi;
-
-                lock (process)
+                if (hasProcessStarted)
                 {
-                    if (!runnerArgs.CancellationToken.IsCancellationRequested)
-                    {
-                        process.Start();
-                        hasProcessStarted = true;
-                    }
-                    else
-                    {
-                        LogMessage(CFamilyStrings.MSG_ExecutionCancelled);
-                        return;
-                    }
-                }
-
-                process.BeginErrorReadLine();
-
-                // Warning: do not log the raw command line args as they
-                // may contain sensitive data
-                LogDebug(CFamilyStrings.MSG_ExecutingFile,
-                    runnerArgs.ExeName,
-                    runnerArgs.AsLogText(),
-                    runnerArgs.WorkingDirectory,
-                    process.Id);
-
-                try
-                {
-                    runnerArgs.HandleInputStream?.Invoke(process.StandardInput);
-
-                    // the caller needs to start a blocking read operation, otherwise the method would exit.
-                    runnerArgs.HandleOutputStream?.Invoke(process.StandardOutput);
-
-                    // Give any asynchronous events the chance to complete
-                    process.WaitForExit(); 
-                    ExitCode = process.ExitCode;
-                    LogDebug(CFamilyStrings.MSG_ExecutionExitCode, process.ExitCode);
-                }
-                catch (Exception ex) when (isRunningProcessCancelled && !ErrorHandler.IsCriticalException(ex))
-                {
-                    // If a process is cancelled mid-stream, an exception will be thrown.
+                    Core.ETW.Events.Instance.ProcessRunnerEnd(processId, timer.ElapsedMilliseconds);
                 }
             }
         }
+
         private void KillProcess(Process process)
         {
             try

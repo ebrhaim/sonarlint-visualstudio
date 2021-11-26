@@ -52,6 +52,8 @@ namespace SonarLint.VisualStudio.Core.Binding
 
         public Task<IBindingConfig> GetConfigurationAsync(SonarQubeQualityProfile qualityProfile, Language language, BindingConfiguration bindingConfiguration, CancellationToken cancellationToken)
         {
+            ETW.Events.Instance.GetBindingConfigStart();
+
             var provider = Providers.FirstOrDefault(p => p.IsLanguageSupported(language));
 
             if (provider == null)
@@ -59,7 +61,10 @@ namespace SonarLint.VisualStudio.Core.Binding
                 throw new ArgumentOutOfRangeException(nameof(language));
             }
 
-            return provider.GetConfigurationAsync(qualityProfile, language, bindingConfiguration, cancellationToken);
+            var result = provider.GetConfigurationAsync(qualityProfile, language, bindingConfiguration, cancellationToken);
+           
+            ETW.Events.Instance.GetBindingConfigEnd();
+            return result;
         }
 
         public bool IsLanguageSupported(Language language)
