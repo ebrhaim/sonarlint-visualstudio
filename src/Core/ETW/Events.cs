@@ -37,8 +37,8 @@ namespace SonarLint.VisualStudio.Core.ETW
 
         #region General 0-999
 
-        private const int ProcessRunnerStartId = 1001;
-        private const int ProcessRunnerEndId = 1001;
+        private const int ProcessRunnerStartId = 1;
+        private const int ProcessRunnerEndId = 2;
 
         [Event(ProcessRunnerStartId, Level = EventLevel.Informational, Keywords = Keywords.General)]
         public void ProcessRunnerStart(int processId)
@@ -86,7 +86,6 @@ namespace SonarLint.VisualStudio.Core.ETW
         public void CFamilyGetBindingConfigEnd() => Write(CFmailyGetBindingConfigEndId);
 
         #endregion
-
 
         #region Binding: 2000-2999
 
