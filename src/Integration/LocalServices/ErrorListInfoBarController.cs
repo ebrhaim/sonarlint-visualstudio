@@ -29,9 +29,11 @@ using EnvDTE;
 using Microsoft.VisualStudio.Imaging;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using Microsoft.VisualStudio.Threading;
 using SonarLint.VisualStudio.Core;
 using SonarLint.VisualStudio.Core.Binding;
 using SonarLint.VisualStudio.Core.InfoBar;
+using SonarLint.VisualStudio.Infrastructure.VS;
 using SonarLint.VisualStudio.Integration.Binding;
 using SonarLint.VisualStudio.Integration.NewConnectedMode;
 using SonarLint.VisualStudio.Integration.Resources;
@@ -83,6 +85,8 @@ namespace SonarLint.VisualStudio.Integration
 
         public void Refresh()
         {
+            logger.WriteLine($"XXX [ErrorListInfoBarController] Refresh");
+
             // This is public method, so it's the caller's responsibility to handle uncaught exception
             this.AssertOnUIThread();
 
@@ -100,6 +104,7 @@ namespace SonarLint.VisualStudio.Integration
             // when the delegate will execute, and we should handle those cases
             if (this.IsActiveSolutionBound)
             {
+                logger.WriteLine($"XXX [ErrorListInfoBarController] calling ProcessSolutionBinding OnIdle");
                 this.InvokeWhenIdle(this.ProcessSolutionBinding);
             }
         }
@@ -154,14 +159,19 @@ namespace SonarLint.VisualStudio.Integration
             this.currentErrorWindowInfoBar.Closed -= this.CurrentErrorWindowInfoBar_Closed;
             this.currentErrorWindowInfoBar.ButtonClick -= this.CurrentErrorWindowInfoBar_ButtonClick;
 
-            IInfoBarManager manager = this.host.GetMefService<IInfoBarManager>();
-            if (manager == null) // Could be null during shut down
-            {
-                return;
-            }
 
-            manager.DetachInfoBar(this.currentErrorWindowInfoBar);
-            this.currentErrorWindowInfoBar = null;
+            // The service call and detaching the info bar must be done on the UI thread.
+            RunOnUIThread.Run(() =>
+            {
+                IInfoBarManager manager = this.host.GetMefService<IInfoBarManager>();
+                if (manager == null) // Could be null during shut down
+                {
+                    return;
+                }
+
+                manager.DetachInfoBar(this.currentErrorWindowInfoBar);
+                this.currentErrorWindowInfoBar = null;
+            });
         }
 
         private void CancelQualityProfileProcessing()
@@ -172,7 +182,18 @@ namespace SonarLint.VisualStudio.Integration
 
         internal /*for testing purposes*/ void ProcessSolutionBinding()
         {
+            logger.WriteLine($"XXX [ErrorListInfoBarController] ProcessSolutionBinding");
+            ProcessSolutionBindingAsync().Forget();
+        }
+
+        private async Task ProcessSolutionBindingAsync()
+        {
+            logger.WriteLine($"XXX [ErrorListInfoBarController] ProcessSolutionBindingAsync");
+
             ETW.CodeMarkers.Instance.ErrorListControllerProcessStart();
+
+            // Switch to a background thread
+            await TaskScheduler.Default;
 
             // We could be on a UI thread so any unhandled exceptions will crash VS.
             // We can't catch at a higher level as this method queues a recursive callback
@@ -212,14 +233,17 @@ namespace SonarLint.VisualStudio.Integration
 
         private void ProcessSolutionBindingCore()
         {
+            ThreadHelper.ThrowIfOnUIThread();
+
             this.OutputMessage(Strings.SonarLintCheckingForUnboundProjects);
 
             Project[] unboundProjects = this.unboundProjectFinder.GetUnboundProjects().ToArray();
+
             if (unboundProjects.Length > 0)
             {
                 this.OutputMessage(Strings.SonarLintFoundUnboundProjects, unboundProjects.Length, string.Join(", ", unboundProjects.Select(p => p.UniqueName)));
 
-                this.UpdateRequired();
+                RunOnUIThread.Run(() => this.UpdateRequired());
             }
             else
             {
