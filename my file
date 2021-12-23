@@ -1,0 +1,263 @@
+#include <iostream>
+
+using namespace std;
+
+template <class Type>
+struct node
+{
+    Type info;
+    node *link;
+};
+template <class Type>
+class circularLinkedList //public node<Type>
+{
+public:
+    const circularLinkedList<Type>& operator=(const node<Type> otherList);
+    void initializeList();
+    void destroyList();
+    bool isEmpty()const;
+    int lengthList()const;
+    void insertItem(const Type& item);
+    void deleteItem(const Type& item);
+    bool seaarchItem(const Type& item);
+    void printList()const;
+    circularLinkedList(const node<Type>& otherList); //copy
+    circularLinkedList();
+    ~circularLinkedList();
+private:
+    void copyList(const node<Type> &otherList);
+    node<Type> *first;
+    int count;
+};
+template <class Type>
+const circularLinkedList<Type>& circularLinkedList<Type>::operator=(const node<Type> otherList)
+{
+    if (this != &otherList)
+        copyList(otherList);
+    return *this;
+
+}
+template <class Type>
+void circularLinkedList<Type>::initializeList()
+{
+    destroyList();
+}
+template <class Type>
+void circularLinkedList<Type>::destroyList()
+{
+    if (first != NULL)
+    {
+        node<Type> *temp;
+        temp = first;
+        if (first->link == first)
+        {
+            delete temp;
+            first = NULL;
+        }
+        else
+        {
+            while(first != NULL)
+            {
+                temp = first;
+                first = first->link;
+                delete temp;
+            }
+        }
+        count = 0;
+    }
+}
+template <class Type>
+bool circularLinkedList<Type>::isEmpty()const
+{
+    return (count == 0);
+}
+template <class Type>
+int circularLinkedList<Type>::lengthList()const
+{
+    return count;
+}
+template <class Type>
+void circularLinkedList<Type>::insertItem(const Type& item)
+{
+    node<Type> *current, *trail, *newNode;
+    newNode = new node<Type>;
+    newNode->info = item;
+    if (first == NULL) //no item
+    {
+        first = newNode;
+        first->info = item;
+        first->link = first;
+    }
+    else //there is an item at least
+    {
+        if(first->info >= item) //smaller item(first one)
+        {
+            if(first->link == first) //one item
+                newNode->link = first;
+            else    //more than one item
+                newNode->link = first->link;
+            first->link = newNode;
+            first = newNode;
+        }
+        else //in the middle of the list or the last one
+        {
+            current = first->link;
+            trail = first;
+            while(current != first)
+            {
+                if(current->info >= item) //item will be in between current and trail
+                    break;
+                trail = current;
+                current = current->link;
+            }
+            if(current == first) // larger item(last one)
+                newNode->link = first;
+            else //in the middle
+                newNode->link = current;
+            trail->link = newNode;
+        }
+    }
+    count++;
+}
+template <class Type>
+void circularLinkedList<Type>::deleteItem(const Type& item)
+{
+    node<Type> *current, *trail;
+    current = first;
+    if (first == NULL) //no item
+        cout << "there is no item to be deleted" << endl;
+    else //there is an item at least
+    {
+        if(first->info > item) //item to be deleted is less that the first item(not exist)
+                cout << "item not exist" << endl;
+        else if(first->info == item && first->link == first) //item to be deleted is the first one and the only one
+        {
+            first = NULL;
+            delete current;
+            count--;
+        }
+        else // item to be deleted in the middle of the list or the last one or the first one, with more than one item or not exist
+        {
+            current = first->link;
+            trail = first;
+            while(current != first)
+            {
+                if(current->info >= item) //item will be current
+                    break;
+                trail = current;
+                current = current->link;
+            }
+            if(current->info > item) //item not exist
+                cout << "item not exist" << endl;
+            else //item to be deleted is in the list
+            {
+                if(current == first) //item to be deleted is the first one
+                {
+                    first = first->link;
+                    trail->link = first;
+                }
+                else    //item to be deleted is in the middle
+                    trail->link == current->link;
+
+                delete current;
+                count--;
+            }
+        }
+    }
+}
+template <class Type>
+bool circularLinkedList<Type>::seaarchItem(const Type& item)
+{
+    if(first == NULL)
+        return false;
+    if(first > item)
+        return false;
+    node<Type> *current = first;
+    do
+    {
+        if(current->info == item)
+            return true;
+        current = current->link;
+    }
+    while(current != first && current->info < item);
+
+    return false;
+}
+template <class Type>
+void circularLinkedList<Type>::printList()const
+{
+    if(!isEmpty())
+    {
+    node<Type> *current = first;
+    do
+    {
+        cout << current->info << " ";
+        current = current->link;
+    }
+    while(current != first);
+    cout << endl;
+    }
+}
+template <class Type>
+circularLinkedList<Type>::circularLinkedList(const node<Type>& otherList)  //copy
+{
+    copyList(otherList);
+}
+template <class Type>
+circularLinkedList<Type>::circularLinkedList()
+{
+    first = NULL;
+}
+template <class Type>
+circularLinkedList<Type>::~circularLinkedList()
+{
+    destroyList();
+}
+template <class Type>
+void circularLinkedList<Type>::copyList(const node<Type> &otherList)
+{
+    if(!isEmpty() || otherList.isEmpty())
+       destroyList();
+    if(!otherList.isEmpty())
+    {
+        node<Type> *newNode, *next, *current = otherList->first->link->link;
+        first = newNode;
+        first->link = first;
+        first->info = otherList.first->info;
+        if(otherList.first->link != first) //second one
+        {
+            newNode = new node<Type>;
+            newNode->info = otherList.first->info;
+            newNode->link = first;
+        }
+        while(current != otherList.first) // if more than 2 or just two
+        {
+            next = new node<Type>;
+            next->info = current->info;
+            newNode->link = next;
+            next->link = first;
+            current = current->link;
+            newNode = next;
+        }
+    }
+}
+
+int main()
+{
+    circularLinkedList<int> obj1, obj2;
+    obj1.insertItem(9);
+    obj1.insertItem(6);
+    obj1.insertItem(7);
+    obj1.insertItem(8);
+    obj1.insertItem(4);
+    obj1.insertItem(5);
+    obj1.insertItem(3);
+    obj1.insertItem(1);
+    obj1.insertItem(2);
+
+    obj1.printList();
+    obj1 = obj2;
+    obj2.printList();
+
+    return 0;
+}
